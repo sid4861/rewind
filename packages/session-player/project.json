@@ -1,0 +1,63 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "session-player",
+  "projectType": "application",
+  "sourceRoot": "packages/session-player/src",
+  "tags": ["scope:player", "type:app"],
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "rsbuild dev",
+        "cwd": "packages/session-player"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "rsbuild build",
+        "cwd": "packages/session-player"
+      },
+      "outputs": ["{projectRoot}/dist"],
+      "cache": true
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json",
+        "cwd": "packages/session-player"
+      },
+      "cache": true
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint src",
+        "cwd": "packages/session-player"
+      },
+      "cache": true
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "playwright test --project=chromium",
+        "cwd": "packages/session-player"
+      }
+    },
+    "fidelity": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "playwright test --project=fidelity",
+        "cwd": "packages/session-player"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --passWithNoTests",
+        "cwd": "packages/session-player"
+      },
+      "cache": true
+    }
+  }
+}

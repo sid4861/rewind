@@ -1,0 +1,31 @@
+{
+  "name": "@rewind/session-player",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "preview": "rsbuild preview"
+  },
+  "dependencies": {
+    "@rewind/session-schema": "workspace:*",
+    "@tanstack/react-virtual": "^3.14.10",
+    "fflate": "^0.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rrweb": "^2.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@rsbuild/core": "^1.7.5",
+    "@rsbuild/plugin-react": "^1.4.6",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

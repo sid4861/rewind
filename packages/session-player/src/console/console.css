@@ -1,0 +1,340 @@
+/* Console panel and session timeline. */
+
+.level-chip {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: capitalize;
+}
+
+.level-chip.on {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--text-subtle);
+}
+
+.level-chip.warn.on {
+  color: var(--warning);
+  border-color: #4a3a1c;
+}
+
+.level-chip.error.on,
+.level-chip.uncaught.on {
+  color: #ff9ea2;
+  border-color: #4a2226;
+}
+
+.level-count {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 46px 58px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 10px;
+  border-bottom: 1px solid #1c2029;
+  font-size: 12px;
+  font-family: var(--mono);
+  line-height: 1.5;
+}
+
+.log-line.warn {
+  background: rgb(224 163 62 / 6%);
+}
+
+.log-line.error,
+.log-line.uncaught {
+  background: rgb(239 90 95 / 8%);
+}
+
+.log-line.current {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.log-line.future {
+  opacity: 0.38;
+}
+
+.log-time {
+  font: inherit;
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  text-align: right;
+  padding: 0;
+}
+
+.log-time:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.log-level {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+.log-level.warn {
+  color: var(--warning);
+}
+
+.log-level.error,
+.log-level.uncaught {
+  color: #ff9ea2;
+}
+
+.log-args {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.log-node {
+  min-width: 0;
+}
+
+.log-key {
+  color: #7cb8ff;
+}
+
+.log-val.expandable {
+  cursor: pointer;
+}
+
+.log-val.expandable:hover {
+  text-decoration: underline;
+}
+
+.log-caret {
+  color: var(--text-subtle);
+  margin-right: 3px;
+}
+
+.log-circular {
+  color: #d6a4ff;
+}
+
+.log-error-val {
+  color: #ff9ea2;
+}
+
+.log-null {
+  color: var(--text-subtle);
+}
+
+.log-children {
+  display: block;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.log-child {
+  display: block;
+}
+
+.log-origin {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------- timeline */
+
+.timeline {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 5px 12px;
+  display: flex;
+  align-items: center;
+}
+
+.tl-track {
+  position: relative;
+  width: 100%;
+  height: 34px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tl-lane {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  height: 14px;
+}
+
+.tl-lane:nth-of-type(1) {
+  top: 2px;
+}
+
+.tl-lane:nth-of-type(2) {
+  top: 17px;
+}
+
+.tl-bar {
+  flex: 1 1 0;
+  min-height: 0;
+  border-radius: 1px 1px 0 0;
+}
+
+.tl-bar.interaction {
+  background: #3d5a8a;
+}
+
+.tl-bar.network {
+  background: #2f6b4a;
+}
+
+/* Failures dominate the lane's colour: they are what triage is looking for. */
+.tl-bar.network.error {
+  background: #b8444a;
+}
+
+.tl-lane.ticks {
+  top: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tl-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #ff5a5f;
+  opacity: 0.85;
+}
+
+.tl-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-strong, #3a4150);
+  pointer-events: none;
+}
+
+.tl-segment-label {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  font-size: 9px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.tl-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.tl-marker-flag {
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 3px;
+  height: 100%;
+  background: var(--warning);
+  border-radius: 1px;
+}
+
+.tl-marker-label {
+  position: absolute;
+  bottom: 1px;
+  left: 5px;
+  font-size: 9px;
+  color: var(--warning);
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgb(91 140 255 / 70%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ------------------------------------------------------------- shortcuts */
+
+.shortcuts {
+  position: fixed;
+  inset: 0;
+  background: rgb(8 10 14 / 55%);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.shortcuts-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  min-width: 280px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 45%);
+}
+
+.shortcuts-title {
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shortcut-row kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  text-align: center;
+  color: var(--text);
+}

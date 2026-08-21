@@ -1,0 +1,31 @@
+{
+  "name": "rewind",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "yarn@4.5.3",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "nx run-many -t build",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@nx/eslint-plugin": "23.1.1",
+    "@types/node": "^20.19.0",
+    "eslint": "^9.39.0",
+    "nx": "23.1.1",
+    "prettier": "^3.9.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^3.2.7"
+  }
+}

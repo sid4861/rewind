@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A push that supersedes an in-flight run makes the older one useless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # nx affected diffs against a base commit, so a shallow clone leaves it
+          # with nothing to compare and it silently falls back to running
+          # everything.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable Yarn
+        run: corepack enable
+
+      - name: Install
+        run: yarn install --immutable
+
+      # Establishes the SHAs nx affected compares against.
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Lint, typecheck, unit test, build (affected only)
+        run: yarn nx affected -t lint typecheck test build --parallel=3
+
+      # Guard #5: a session recorder loose in production is a data-collection
+      # incident, not a performance regression. Runs before the slow e2e steps
+      # so it fails fast.
+      - name: Production exclusion — recorder must be absent from the bundle
+        run: yarn nx run session-demo-app:production-exclusion
+
+      - name: Install Playwright browser
+        # Only when something that can change runtime behaviour moved. The
+        # browser download is the slowest step in this job by a wide margin.
+        run: yarn playwright install --with-deps chromium
+
+      # The M1 round trip, in order: the demo app produces a real archive, then
+      # the player proves it can replay it. The player job depends on the
+      # fixture the demo job writes, so these cannot run in parallel.
+      - name: E2E — record a session and produce an archive
+        run: yarn nx run session-demo-app:e2e
+
+      - name: E2E — replay that archive in the player
+        run: yarn nx run session-player:e2e
+
+      # The fidelity score. Runs last because it depends on the fixture and the
+      # live screenshots the demo-app job produced, and it is the check that
+      # turns "the replay looks right" into a number CI can fail on.
+      - name: Fidelity — pixel-diff replay against the live app
+        run: yarn nx run session-player:fidelity
+
+      # Prints the recording-cost table into the job log on every run, so a
+      # regression in overhead or archive size is visible in CI history rather
+      # than only when someone thinks to measure it.
+      - name: Cost benchmark
+        run: yarn nx run session-demo-app:e2e -- --grep "measures the cost"
+
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            packages/*/test-results/**
+            packages/session-player/e2e/__fidelity__/diff/**
+          retention-days: 7
+          if-no-files-found: ignore

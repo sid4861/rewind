@@ -1,0 +1,59 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "session-demo-app",
+  "projectType": "application",
+  "sourceRoot": "packages/session-demo-app/src",
+  "tags": ["scope:demo", "type:app"],
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "rsbuild dev",
+        "cwd": "packages/session-demo-app"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "rsbuild build",
+        "cwd": "packages/session-demo-app"
+      },
+      "outputs": ["{projectRoot}/dist"],
+      "cache": true
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json",
+        "cwd": "packages/session-demo-app"
+      },
+      "cache": true
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint src",
+        "cwd": "packages/session-demo-app"
+      },
+      "cache": true
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "playwright test",
+        "cwd": "packages/session-demo-app"
+      }
+    },
+    "production-exclusion": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "rsbuild build",
+          "node ../../scripts/assert-recorder-excluded.mjs dist"
+        ],
+        "cwd": "packages/session-demo-app",
+        "parallel": false
+      }
+    }
+  }
+}

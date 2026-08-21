@@ -1,0 +1,429 @@
+SESSION REPLAY TOOLKIT — TODO
+Yarn workspaces · Nx · Rsbuild (Rspack) · React 18 · TypeScript strict
+=====================================================================
+Legend:  [ ] todo   [~] in progress   [x] done   (!) blocking/high-risk
+
+
+-------------------------------------------------------------------
+M0 — DECISIONS & MONOREPO SETUP
+-------------------------------------------------------------------
+DECISIONS
+[ ] (!) Audit host apps: what already patches fetch/XHR?
+    (Sentry, Datadog RUM, axios interceptors, MSW, OpenTelemetry)
+[ ] (!) Decide recorder patch order relative to the above; write it down
+[~] Do host apps render charts to CANVAS or SVG? (decides recordCanvas priority)
+    -> Demo app uses SVG (replays for free). recordCanvas is wired but
+       UNEXERCISED - no canvas exists until the M5 dashboard twin.
+[x] Yarn Berry PnP or node-modules linker? (verify rrweb/fflate resolve cleanly)
+    -> Yarn 4.5.3, nodeLinker: node-modules. rrweb/fflate resolve cleanly.
+[x] MSW vs local Express for demo app mock API
+    -> MSW. NOTE: browser MSW is a Service Worker, NOT a fetch patch, so it
+       does NOT test patch order (PLAN 7.1 is wrong on this). The fetch-patch
+       fallback in mocks/fallback.ts is the real patch-order fixture for M2.
+[~] Default fidelity mode (assume 'high', validate after size testing)
+    -> 'high' is the default. Not yet validated against real archive sizes;
+       needs the M5 long-session run.
+[x] Archive password protection: yes/no
+    -> NO. fflate has no real encryption, and a password on a Slack
+       attachment is theatre. Revisit if data sensitivity changes.
+
+NX + YARN
+[x] Create packages: session-schema, session-recorder, session-player,
+    session-demo-app
+[x] Wire yarn workspaces (workspace:* references, single root lockfile)
+[x] tsconfig.base.json path aliases for @<scope>/session-*
+[x] project.json per package with build/dev/test/lint targets
+[x] nx.json: mark build/test/lint cacheable
+[x] namedInputs so player changes don't invalidate recorder cache
+[x] Nx tags + @nx/enforce-module-boundaries rules:
+      - schema: importable by all
+      - recorder: apps + demo only
+      - player: imports schema ONLY, never recorder
+[x] (!) Boundary rule: production apps cannot depend on session-recorder
+[x] nx affected wired into CI
+
+RSBUILD / RSLIB
+[x] Rslib config for session-schema (esm + cjs + dts)
+[x] Rslib config for session-recorder (react/react-dom as externals/peers)
+[x] Rsbuild + @rsbuild/plugin-react for session-player
+[x] Rsbuild + @rsbuild/plugin-react for session-demo-app
+[x] (!) Demo app resolve.alias -> recorder src/ (hot-reload inner loop)
+[x] Worker support: use new Worker(new URL('./x.worker.ts', import.meta.url))
+[x] Bundle analyzer configured (needed for the production-exclusion CI check)
+
+SHARED TOOLING
+[x] eslint + prettier + vitest configs shared across packages
+[x] Playwright set up against session-demo-app
+
+
+-------------------------------------------------------------------
+M1 — SKELETON + DEMO APP (record DOM -> zip -> replay)
+-------------------------------------------------------------------
+SCHEMA
+[x] SCHEMA_VERSION constant
+[x] Types: SessionManifest, SessionMeta, NetworkEvent, ConsoleEvent,
+    ErrorEvent, NavigationEvent, Marker, FidelityMode
+[x] Zod schemas mirroring each type
+[x] isCompatible(version) helper
+[x] Shared constants: redaction denylists, size limits, skip content-types,
+    fidelity presets
+
+DEMO APP (minimum viable, expand later)
+[x] Rsbuild + React + React Router scaffold
+[x] Mock API layer (MSW or Express) wired
+[x] Screen 1: Dashboard (parallel API calls on mount, skeleton -> data)
+[x] Screen 2: Data Table (sort/filter/paginate -> API calls, nested scroll)
+[x] Screen 3: Form (inputs incl. password + card field)
+[x] Recorder mounted in the demo app via the source alias
+
+RECORDER — WIDGET
+[x] Portal container appended to document.body
+[x] Shadow DOM root for style isolation
+[x] (!) Widget container marked with rrweb blockClass (exclude itself)
+[x] Collapsed icon + expanded popup UI
+[x] Draggable, position persisted to localStorage
+[x] Start / Stop / Pause controls
+[x] Live counters: duration, event count, network count, est. size
+[x] Tester name + session notes (persisted, prefilled)
+[x] Add-marker button + label input
+[x] Recording-active indicator (pulsing, non-dismissible)
+
+RECORDER — DOM CAPTURE
+[x] rrweb.record() wired with fidelity preset config
+[x] Single monotonic clock origin captured at start()
+[x] inlineStylesheet: true, collectFonts: true
+[x] sampling throttles per fidelity mode
+[x] checkoutEveryNms per fidelity mode (seekable snapshots)
+[x] slimDOMOptions to drop comments/meta/favicons
+
+RECORDER — ARCHIVE
+[x] manifest.json (schemaVersion, fidelityMode, counts, file list)
+[x] meta.json (app, version, browser, OS, viewport, DPR, colorScheme,
+    tester, markers, active redaction rules)
+[x] Serialize each stream to its own JSON file
+[x] Zip with fflate
+[x] Trigger download; revoke object URL after
+[x] Filename: session-<app>-<ISO>-<shortId>.zip
+
+PLAYER — SKELETON
+[x] Rsbuild + React app scaffold
+[x] Drag-and-drop + file picker zip import
+[x] Unzip in a Web Worker
+[x] Validate manifest, check schema compat, friendly error on mismatch
+[x] Mount rrweb-player with dom-events.json
+[x] (!) Letterbox to recorded viewport + DPR (never stretch to window)
+[x] Basic play/pause working
+
+>>> M1 EXIT: record a click in the demo app, download zip, replay it locally.
+    [x] DONE + verified by automated round trip:
+          nx run session-demo-app:e2e   (records -> writes sample-session.zip)
+          nx run session-player:e2e     (loads that archive -> replays it)
+        Note: rrweb's Replayer is rAF-driven, so playback can only be verified
+        in a real browser tab - hence Playwright rather than a manual check.
+
+
+-------------------------------------------------------------------
+M2 — NETWORK CAPTURE  (core custom work)
+-------------------------------------------------------------------
+FETCH
+[x] Patch window.fetch; stash original in closure
+[x] Normalize input: string | URL | Request -> absolute URL + method
+[x] Normalize headers (Headers | object | array) -> plain object
+[x] Normalize request body: string, FormData, URLSearchParams, Blob,
+    ArrayBuffer; skip ReadableStream
+[x] (!) Clone response before reading (res.clone().text())
+[x] (!) Regression test: host receives BYTE-IDENTICAL body, recorder on vs off
+[x] Capture status, statusText, response headers, body, timing
+[x] Handle rejections: network error, CORS, AbortError -> failed entry
+[x] Detect opaque responses; label explicitly (not blank)
+[x] Restore original fetch on stop()
+
+XHR
+[x] Patch open (stash method/url)
+[x] Patch setRequestHeader (accumulate)
+[x] Patch send (stash body, startTime)
+[x] loadend -> status, response, timing
+[x] Handle error / timeout / abort
+[x] Parse getAllResponseHeaders() string -> object
+[x] Guard responseType blob/arraybuffer (never stringify binary)
+[x] Restore prototype methods on stop()
+
+REDACTION  (!)
+[x] Header denylist (case-insensitive): authorization, cookie, set-cookie,
+    x-api-key, x-auth-token, proxy-authorization
+[x] Deep body-key denylist: password, token, access_token, refresh_token,
+    secret, apiKey, ssn, pan, aadhaar, cardNumber, cvv
+[x] URL query-param redaction
+[x] Regex scrub: JWTs, bearer tokens, card-shaped digit runs
+[x] maskAllInputs default true; data-record-mask / data-record-block /
+    -> NOTE: rrweb's ignoreSelector suppresses input EVENTS only; it does NOT
+       remove content. Verified against rrweb's source after the exclusion test
+       caught the wrong assumption. data-record-block is the content exclusion.
+    data-record-unmask attributes
+[x] Custom redact(entry) hook; null drops entry entirely
+[x] Active rules written into meta.json
+[x] (!) Redaction at CAPTURE time, never replay time
+[x] (!) Fidelity settings must NEVER override redaction
+
+LIMITS
+[x] Per-body cap (default 128KB) -> truncate + truncated: true
+[x] Skip bodies by content-type (image/video/audio/octet-stream/pdf)
+[x] Total network-body budget (default 25MB) -> metadata-only after
+[x] Max session duration + max event count
+[x] Surface limit-hit state in the widget
+[x] Do NOT stringify incrementally while recording (perf trap)
+
+DEMO APP — CHAOS PANEL
+[x] Buttons: 200 / 400 / 401 / 500 responses
+[x] Slow (5s) request
+[x] Network-level failure
+[x] CORS / opaque response
+[x] Aborted request
+[x] Large 5MB response (truncation test)
+[x] Binary/image response (content-type skip test)
+[x] Burst of 100 rapid requests
+[x] POST containing seeded fake secrets (redaction test target)
+
+>>> M2 EXIT: calls captured accurately; host app provably unaffected;
+    seeded secrets absent from archive bytes.
+    [x] DONE + verified:
+          session-recorder unit: byte-identical body, recorder on vs off
+          session-demo-app e2e: redaction-fuzz greps RAW archive bytes
+        Patch order decided: we wrap whatever is installed at start(), and on
+        stop() restore ONLY if the global is still our wrapper - so a library
+        that patched after us keeps working.
+
+
+-------------------------------------------------------------------
+M3 — PLAYER PANELS + SYNCHRONIZATION
+-------------------------------------------------------------------
+[x] Custom control bar (replace rrweb-player built-ins)
+[x] React-owned playback state; subscribe to replayer time updates
+[x] Throttle currentTime to ~10fps for panel sync
+[x] Speed control 0.5x-8x, skip-inactive, frame step, fullscreen
+[x] Virtualized network table (@tanstack/react-virtual)
+[x] Columns: status, method, path, type, size, duration, waterfall, time
+[x] Color-coded status (2xx/3xx/4xx/5xx/failed)
+[x] Follow-playback mode: auto-scroll, highlight current, dim future
+[x] Show-all mode toggle
+[x] Detail drawer: Headers / Payload / Response / Timing tabs
+[x] JSON tree viewer: collapse, copy, search
+[x] (!) "Jump to this call" -> seeks replay to that timestamp
+[x] Filters: method, status class, URL substring, content-type,
+    errors-only, slow-only
+[x] Visual treatment for truncated + [REDACTED] values
+
+>>> M3 EXIT: click a network row, replay seeks to that exact moment.
+    [x] DONE + verified: session-player e2e 'JUMP TO CALL seeks the replay'
+        Built on rrweb's Replayer directly, NOT rrweb-player: playback state
+        lives in React so it can drive the panels, and the viewport letterboxes
+        to the recorded size instead of filling the window.
+
+
+-------------------------------------------------------------------
+M4 — CONSOLE, ERRORS, NAVIGATION, TIMELINE
+-------------------------------------------------------------------
+[x] Patch console.log/info/warn/error/debug
+[x] (!) Safe serializer: circular refs, DOM nodes, functions, depth+size caps
+[x] Always call through to original console method
+[x] window 'error' listener -> message, stack, source
+[x] 'unhandledrejection' listener
+[x] Patch history.pushState / replaceState + popstate
+[x] Console panel: level filter, search, expandable objects, stack traces
+[x] Console panel follow-playback sync
+[x] Timeline: interaction density track
+[x] Timeline: network density, 4xx/5xx in red
+[x] Timeline: console-error ticks
+[x] Timeline: tester markers as labeled flags
+[x] Timeline: route changes as segment boundaries
+[x] Click timeline to seek
+[x] Jump-to-next-error control
+[x] Demo app: chaos panel console/error triggers (circular obj, DOM node,
+    uncaught error, unhandled rejection)
+
+>>> M4 EXIT: a 20-min session triageable in under a minute from the timeline.
+    [x] DONE + verified: session-demo-app e2e 'captures console output, errors
+        and navigation without breaking the app'.
+        NOTE: console redaction had to move INSIDE the serializer. Once
+        {password:'x'} becomes entries:[['password',...]], the key is just a
+        string in an array and key-based redaction walks past it.
+
+
+-------------------------------------------------------------------
+M5 — FIDELITY PASS  ("exactly like Glassbox")
+-------------------------------------------------------------------
+FIDELITY MODES
+[x] Implement 'balanced' | 'high' | 'max' presets
+[x] Mode indicator in widget + recorded into manifest.json
+
+STYLES
+[x] inlineStylesheet verified against real app CSS
+[x] adoptedStyleSheets / constructable stylesheets
+[x] CSS-in-JS runtime <style> injection captured as mutations
+[x] CSS custom properties / design tokens replay
+[x] (!) Capture resolved color scheme; player FORCES it (no OS inheritance)
+
+FONTS
+[x] collectFonts verified — no fallback-font drift
+[x] Icon fonts render (no tofu boxes)
+
+IMAGES & MEDIA
+[x] inlineImages in high/max
+[x] srcset / currentSrc resolution captured
+[x] Lazy-loaded images replay loaded state
+[x] SVG sprite <use href="#id"> resolves
+[x] <video>/<audio>: playback state replays; document media-content limit
+
+CANVAS
+[x] recordCanvas: snapshot (high) / fps (max)
+[x] Verify canvas charts render in replay
+[x] Measure CPU + size cost; confirm 'balanced' opt-out is justified
+
+SHADOW DOM / COMPONENTS
+[x] Shadow roots captured
+[x] Slotted content correct
+[ ] Test against the actual component library in use
+
+LAYOUT & VIEWPORT
+[x] viewport + devicePixelRatio in meta.json
+[x] Player letterboxes, never stretches
+[x] Recorded dimensions shown in player header
+
+SCROLL
+[x] (!) Nested scroll container positions (not just document scroll)
+[x] Virtualized list behavior documented
+    -> The endurance feed is a fixed 60-row sliding window on purpose: an
+       unbounded list would measure the browser's memory rather than the
+       recorder's, and any slowdown could be blamed on either side.
+[x] position: sticky / fixed correct relative to scroll
+
+INTERACTION STATE
+[x] Hover states reconstruct (tooltips/dropdowns appear in replay)
+[x] Focus rings / :focus-visible
+[x] Visible cursor + click indicators in player
+[x] Document native <select>/datepicker limitation (browser chrome, uncapturable)
+
+IFRAMES
+[x] Same-origin iframe capture enabled
+[x] Cross-origin iframe -> labeled placeholder in player (not empty box)
+
+ASSET HANDLING
+[x] (!) Externalize large assets to assets/ in zip, reference by hash
+[x] Dedupe repeated assets by hash
+[x] Separate asset budget tracked
+[x] Graceful degradation on budget exceed; record it in meta.json
+[x] Player resolves assets/ refs to blob URLs before replay
+
+DEMO APP — FIDELITY SCREENS
+[x] Screen: Dashboard with BOTH canvas and SVG charts side by side
+[x] Screen: Media & Assets (local/remote/srcset/lazy images, icon font,
+    SVG sprite, custom web font, video, same-origin + cross-origin iframes)
+[x] Screen: Components (web components + shadow DOM, CSS-in-JS, portal modal,
+    CSS animations, dark-mode toggle via CSS variables)
+[x] Screen: Long Session (continuous DOM churn + polling, 10-30min endurance)
+
+FIDELITY HARNESS  (!) — the thing that makes "Glassbox-level" measurable
+[x] Playwright drives fixed demo scenario with recorder active
+[x] Screenshot LIVE app at N checkpoints + record timestamps
+[x] Produce archive; load in player headlessly; seek to each checkpoint
+[x] Screenshot REPLAY at each checkpoint
+[x] Pixel-diff live vs replay; compute similarity score
+[x] Assert score > threshold (start 95%, tighten over time)
+[x] Fail CI on fidelity regression
+[ ] Re-run harness after every rrweb version bump
+
+    RECORDING COST — measured (4s storm churn + media + canvas screens):
+      balanced    41 KB   148 events  0 assets  +9.8% wall time
+      high       188 KB   148 events  5 assets  +7.1% wall time
+      balanced/high archive ratio 0.22x -> the opt-out IS justified
+    NOTE: a first attempt measured text-only churn and reported the two presets
+    as byte-identical. That was a true measurement of the wrong thing — the
+    presets differ on inlineImages/recordCanvas/collectFonts, so the workload
+    has to include images, a canvas and a web font or the comparison is vacuous.
+
+    ENDURANCE — the event cap used to LOSE the session. `void stop()` built an
+    archive and discarded it, so a tester who ran long got no file and no
+    explanation. An involuntary stop now saves itself and records why, in both
+    meta.degradations and the widget.
+
+    ASSET EXTERNALIZATION — measured on the fidelity fixture:
+      archive 2,012,320 -> 204,128 bytes (9.9x smaller)
+      dom-events.json ~2.6MB -> 430KB; 5 deduped assets totalling 149KB
+      fidelity UNCHANGED at 99.90% mean, so the shrink is lossless
+    Over-budget assets are left INLINE rather than blanked: the budget bounds
+    what gets copied into assets/, and silently emptying an image would
+    misrepresent the session.
+
+>>> M5 EXIT: a measured fidelity score, not a vibe.
+    [x] DONE. 99.90% mean across 10 checkpoints, worst 99.77%, threshold 97%.
+          nx run session-demo-app:e2e   (captures live shots + archive)
+          nx run session-player:fidelity (replays, pixel-diffs, scores)
+
+    What the harness caught that nothing else did:
+      1. The replay iframe rendered 800px BELOW its clipping container, so every
+         replay was visually blank. Cause: rrweb's mouse-tail canvas left in
+         normal flow because rrweb/dist/style.css was never imported. Every
+         earlier test was DOM-based and passed happily.
+      2. A whole screen of images silently dropped when SEEKING. rrweb's
+         fast-forward is lossy for large mutation batches; playback is not.
+      3. The player converted timestamps using the recorder's clock origin, but
+         rrweb's replay clock starts at its FIRST EVENT. Every marker and
+         jump-to-call was off by that delta.
+      4. Session duration came from the DOM stream alone, so network calls that
+         finished after the last DOM mutation sat permanently beyond the
+         scrubber and could never stop looking "in the future".
+
+    Measurement runs through PLAYBACK, not seeking: seeking scored the same
+    session anywhere from 84% to 99.7% depending on machine load, and a metric
+    that unstable is worse than none.
+
+
+-------------------------------------------------------------------
+M6 — HARDENING & DX
+-------------------------------------------------------------------
+[ ] WebSocket capture (open/close/send/message) with strict caps
+[ ] performance.getEntriesByType('resource') supplement at stop
+[ ] Label resource-timing entries distinctly in player
+[x] Copy request as cURL
+[x] Export network entries as HAR
+[x] Deep-link state via URL hash (#t=125300&net=req_42)
+[x] Keyboard shortcuts: space, arrows, f (find), e (next error)
+[ ] Zip in a worker or chunked; progress indicator in widget
+
+PRODUCTION SAFETY  (!)
+[x] enabled must be explicitly true
+[x] Refuse to start in NODE_ENV=production without allowInProduction
+[x] Host apps use dynamic import() behind dev check
+[x] Nx boundary rule enforced (prod apps cannot depend on recorder)
+[x] (!) CI: rsbuild build each host app, assert recorder ABSENT from output
+[x] Manually inspect a production bundle to confirm
+
+DOCS
+[x] README: install, config options, fidelity modes, redaction config
+[x] Tester guide: how to record, add markers, share the zip
+[x] Developer guide: opening an archive, reading the panels
+[x] Known limitations doc (native selects, cross-origin iframes, media content,
+    virtualized lists) — set expectations before someone files it as a bug
+[x] Data-handling note: archives contain app data; delete after bug closure
+
+
+-------------------------------------------------------------------
+TESTING (continuous, not at the end)
+-------------------------------------------------------------------
+[x] Unit: normalizers, header parsing, redaction, size caps, serializer
+[x] (!) Integration: demo app responses BYTE-IDENTICAL recorder on vs off
+[x] (!) Patch-coexistence test: recorder + MSW (and Sentry if used) together
+    -> 3 cases: MSW service worker keeps intercepting while recording; the app
+       still works after the recorder restores fetch; and a wrapper installed
+       AFTER us survives our teardown (we restore only what is still ours).
+       Also confirmed the recorder captures StrictMode's aborted duplicate
+       request as a first-class 'aborted' entry, which is useful signal.
+[x] Round-trip: Playwright -> zip -> headless player -> assert counts/order/timing
+[x] (!) Fidelity harness pixel-diff scoring (M5)
+[x] (!) Redaction fuzzing: seed secrets, grep raw archive bytes, assert zero
+[x] Perf: host interaction latency with recording active
+[x] Perf: archive size for 10-min session at each fidelity mode
+[x] Endurance: 30-min long-session run, memory + size behavior
+[x] Compat: bumped schemaVersion -> clear error, not crash
+[ ] Cross-browser: Chrome, Firefox, Safari (esp. fetch/stream), Edge
+[ ] Nx: affected scoping correct, cache invalidation sane

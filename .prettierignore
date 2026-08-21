@@ -1,0 +1,11 @@
+dist
+node_modules
+.nx
+.yarn
+coverage
+playwright-report
+test-results
+yarn.lock
+PLAN.md
+TODO.txt
+BUILD_PROMPT.md
